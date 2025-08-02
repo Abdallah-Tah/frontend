@@ -14,7 +14,23 @@ export default function Home() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files) {
-      setSelectedFiles(Array.from(files));
+      const fileArray = Array.from(files);
+      console.log(`🔍 Raw file selection: ${fileArray.length} files`);
+
+      // Accept ALL files - no filtering, let backend handle validation
+      console.log(`✅ Accepting all ${fileArray.length} files for processing`);
+      console.log(
+        `📁 Files:`,
+        fileArray.map((f) => ({ name: f.name, size: f.size, type: f.type }))
+      );
+
+      if (fileArray.length > 0) {
+        alert(
+          `🎉 Successfully selected ${fileArray.length} files ready for processing! Backend will attempt to process all files as images.`
+        );
+      }
+
+      setSelectedFiles(fileArray);
       setPdfUrl(null); // Reset previous PDF
     }
   };
@@ -25,12 +41,25 @@ export default function Home() {
       return;
     }
 
+    console.log(`🚀 Starting upload of ${selectedFiles.length} files...`);
     setIsLoading(true);
     const formData = new FormData();
 
-    selectedFiles.forEach((file) => {
+    // Add each file to FormData with detailed logging
+    selectedFiles.forEach((file, index) => {
+      console.log(
+        `📎 Adding file ${index + 1}/${selectedFiles.length}: ${file.name} (${(
+          file.size /
+          1024 /
+          1024
+        ).toFixed(2)} MB)`
+      );
       formData.append("files", file);
     });
+
+    console.log(
+      `📤 FormData created with ${selectedFiles.length} files. Starting upload...`
+    );
 
     try {
       const response = await fetch("http://localhost:8000/convert", {
@@ -38,22 +67,50 @@ export default function Home() {
         body: formData,
       });
 
+      console.log(`📥 Response received. Status: ${response.status}`);
+
       if (response.ok) {
+        // Check response headers for processing info
+        const processedImages = response.headers.get("X-Processed-Images");
+        const totalFiles = response.headers.get("X-Total-Files");
+        const skippedFiles = response.headers.get("X-Skipped-Files");
+
+        console.log(
+          `✅ Success! Processed: ${processedImages}, Total: ${totalFiles}, Skipped: ${skippedFiles}`
+        );
+
+        if (processedImages && totalFiles) {
+          alert(
+            `🎉 PDF created successfully!\n\nProcessed: ${processedImages} images\nTotal files sent: ${totalFiles}\nSkipped: ${
+              skippedFiles || 0
+            } files`
+          );
+        }
+
         const blob = await response.blob();
+        console.log(
+          `📄 PDF blob size: ${(blob.size / 1024 / 1024).toFixed(2)} MB`
+        );
         const url = URL.createObjectURL(blob);
         setPdfUrl(url);
       } else {
         const errorData = await response.json();
-        console.error("Error:", errorData.error || "Failed to convert images");
-        alert("Failed to convert images. Please try again.");
+        console.error("❌ Error:", errorData);
+        alert(
+          `Failed to convert images: ${
+            errorData.error || "Unknown error"
+          }\n\nCheck console for details.`
+        );
       }
     } catch (error) {
-      console.error("Error converting images:", error);
+      console.error("💥 Upload error:", error);
       alert(
-        "Failed to connect to server. Make sure the backend is running on port 8000."
+        "Failed to connect to server. Make sure the backend is running on port 8000.\n\nError: " +
+          error
       );
     } finally {
       setIsLoading(false);
+      console.log(`⏹️ Upload process completed.`);
     }
   };
 
@@ -88,8 +145,8 @@ export default function Home() {
             </span>
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Convert multiple images to PDF and merge them into one file with
-            ease
+            Professional document converter for immigration visa applications -
+            adds labeled filenames to each document
           </p>
         </div>
 
@@ -105,13 +162,18 @@ export default function Home() {
                 >
                   <Upload className="mx-auto h-16 w-16 text-gray-400 group-hover:text-blue-500 transition-colors duration-200" />
                   <h3 className="mt-4 text-xl font-semibold text-gray-700 group-hover:text-blue-600">
-                    Select Images to Convert
+                    Select Files
                   </h3>
                   <p className="mt-2 text-sm text-gray-500">
-                    Click here or drag and drop your images
+                    Click here to select multiple files or drag and drop them
                   </p>
                   <p className="mt-1 text-xs text-gray-400">
-                    Supports PNG, JPG, JPEG, GIF, BMP, TIFF
+                    All files will be processed and converted to images with
+                    professional labels
+                  </p>
+                  <p className="mt-1 text-xs text-blue-600">
+                    ✅ Each document will be labeled with filename for official
+                    presentation.
                   </p>
                 </div>
 
@@ -119,7 +181,7 @@ export default function Home() {
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept="image/*"
+                  accept="*/*"
                   onChange={handleFileSelect}
                   className="hidden"
                 />
