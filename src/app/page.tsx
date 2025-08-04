@@ -7,11 +7,14 @@ import { Upload, FileImage, Download, Loader2 } from "lucide-react";
 
 export default function Home() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfFilename, setPdfFilename] = useState<string>("visa_documents.pdf");
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  // Mode for PDF generation: merge all images or split into separate PDFs
+  const [mode, setMode] = useState<"merge" | "split">("merge");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e) => {
     const files = e.target.files;
     if (files) {
       const fileArray = Array.from(files);
@@ -32,6 +35,9 @@ export default function Home() {
 
       setSelectedFiles(fileArray);
       setPdfUrl(null); // Reset previous PDF
+      // Set default download filename based on first selected image
+      const baseName = fileArray[0].name.replace(/\.[^/.]+$/, "");
+      setPdfFilename(`${baseName}.pdf`);
     }
   };
 
@@ -57,8 +63,10 @@ export default function Home() {
       formData.append("files", file);
     });
 
+    // Include mode (merge or split) in upload
+    formData.append("mode", mode);
     console.log(
-      `📤 FormData created with ${selectedFiles.length} files. Starting upload...`
+      `📤 FormData created with ${selectedFiles.length} files, mode=${mode}. Starting upload...`
     );
 
     try {
@@ -74,6 +82,29 @@ export default function Home() {
         const processedImages = response.headers.get("X-Processed-Images");
         const totalFiles = response.headers.get("X-Total-Files");
         const skippedFiles = response.headers.get("X-Skipped-Files");
+
+        // Extract filename from Content-Disposition header
+        const contentDisposition = response.headers.get("Content-Disposition");
+        let filename = "visa_documents.pdf";
+        if (contentDisposition) {
+          // Try to parse extended filename* first
+          const filenameStarMatch = contentDisposition.match(
+            /filename\*=[^']*''([^;\n]*)/
+          );
+          if (filenameStarMatch && filenameStarMatch[1]) {
+            filename = decodeURIComponent(filenameStarMatch[1]);
+          } else {
+            // Fallback to basic filename
+            const filenameMatch = contentDisposition.match(
+              /filename="?([^";]+)"?/
+            );
+            if (filenameMatch && filenameMatch[1]) {
+              filename = filenameMatch[1];
+            }
+          }
+        }
+        setPdfFilename(filename);
+        console.log(`📄 PDF filename: ${filename}`);
 
         console.log(
           `✅ Success! Processed: ${processedImages}, Total: ${totalFiles}, Skipped: ${skippedFiles}`
@@ -118,7 +149,7 @@ export default function Home() {
     fileInputRef.current?.click();
   };
 
-  const removeFile = (index: number) => {
+  const removeFile = (index) => {
     const newFiles = selectedFiles.filter((_, i) => i !== index);
     setSelectedFiles(newFiles);
     if (newFiles.length === 0 && fileInputRef.current) {
@@ -126,7 +157,7 @@ export default function Home() {
     }
   };
 
-  const formatFileSize = (bytes: number) => {
+  const formatFileSize = (bytes) => {
     if (bytes === 0) return "0 Bytes";
     const k = 1024;
     const sizes = ["Bytes", "KB", "MB", "GB"];
@@ -146,7 +177,7 @@ export default function Home() {
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
             Professional document converter for immigration visa applications -
-            adds labeled filenames to each document
+            optimized for small file sizes (&lt;1MB) with labeled filenames
           </p>
         </div>
 
@@ -168,12 +199,12 @@ export default function Home() {
                     Click here to select multiple files or drag and drop them
                   </p>
                   <p className="mt-1 text-xs text-gray-400">
-                    All files will be processed and converted to images with
-                    professional labels
+                    Images will be optimized and compressed for smaller file
+                    sizes while maintaining quality
                   </p>
                   <p className="mt-1 text-xs text-blue-600">
-                    ✅ Each document will be labeled with filename for official
-                    presentation.
+                    ✅ Each document will be labeled with filename and
+                    compressed to under 1MB for easy submission
                   </p>
                 </div>
 
@@ -196,6 +227,32 @@ export default function Home() {
                     <FileImage className="mr-2 h-5 w-5" />
                     Choose Files
                   </Button>
+
+                  {/* Mode Selection: Merge or Split */}
+                  <div className="flex items-center space-x-4">
+                    <label className="inline-flex items-center">
+                      <input
+                        type="radio"
+                        name="mode"
+                        value="merge"
+                        checked={mode === "merge"}
+                        onChange={() => setMode("merge")}
+                        className="form-radio"
+                      />
+                      <span className="ml-2">Merge into one PDF</span>
+                    </label>
+                    <label className="inline-flex items-center">
+                      <input
+                        type="radio"
+                        name="mode"
+                        value="split"
+                        checked={mode === "split"}
+                        onChange={() => setMode("split")}
+                        className="form-radio"
+                      />
+                      <span className="ml-2">Split into separate PDFs</span>
+                    </label>
+                  </div>
 
                   {selectedFiles.length > 0 && (
                     <Button
@@ -269,17 +326,17 @@ export default function Home() {
                     PDF Created Successfully!
                   </h3>
                   <p className="text-green-600 mb-6">
-                    Your images have been converted and merged into a single PDF
-                    file.
+                    Your visa documents have been professionally formatted with
+                    filenames and optimized for submission.
                   </p>
                   <Button
                     asChild
                     size="lg"
                     className="px-8 bg-green-600 hover:bg-green-700"
                   >
-                    <a href={pdfUrl} download="snapmerge-converted.pdf">
+                    <a href={pdfUrl} download={pdfFilename}>
                       <Download className="mr-2 h-5 w-5" />
-                      Download PDF
+                      Download Visa Documents PDF
                     </a>
                   </Button>
                 </div>
